@@ -7,10 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Flight, Ancillary, flightsAPI, bookingsAPI } from '@/lib/api';
+import { Flight, Ancillary, PaymentOffer, flightsAPI, bookingsAPI } from '@/lib/api';
 import { authStorage } from '@/lib/auth';
-import { Plane, Clock, Calendar, Users, Loader2 } from 'lucide-react';
+import { Plane, Clock, Calendar, Users, Loader2, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import PaymentGateway from '@/components/PaymentGateway';
 
 const FlightDetail = () => {
   const { id } = useParams();
@@ -21,6 +22,9 @@ const FlightDetail = () => {
   const [selectedAncillaries, setSelectedAncillaries] = useState<number[]>([]);
   const [passengers, setPassengers] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'debit_card' | 'wallet'>('credit_card');
+  const [paymentOffers, setPaymentOffers] = useState<PaymentOffer[]>([]);
+  const [selectedOffer, setSelectedOffer] = useState<number | null>(null);
+  const [showPayment, setShowPayment] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBooking, setIsBooking] = useState(false);
 
@@ -31,12 +35,14 @@ const FlightDetail = () => {
 
       setIsLoading(true);
       try {
-        const [flightData, ancillariesData] = await Promise.all([
+        const [flightData, ancillariesData, offersData] = await Promise.all([
           flightsAPI.getById(parseInt(id), token),
           flightsAPI.getAncillaries(token),
+          flightsAPI.getPaymentOffers(token),
         ]);
         setFlight(flightData);
         setAncillaries(ancillariesData);
+        setPaymentOffers(offersData);
       } catch (error: any) {
         toast({
           title: 'Failed to load flight details',
@@ -65,7 +71,25 @@ const FlightDetail = () => {
     const ancillaryTotal = ancillaries
       .filter((a) => selectedAncillaries.includes(a.id))
       .reduce((sum, a) => sum + a.price, 0);
-    return flightTotal + ancillaryTotal;
+    const subtotal = flightTotal + ancillaryTotal;
+    
+    // Apply discount if offer selected
+    if (selectedOffer) {
+      const offer = paymentOffers.find(o => o.id === selectedOffer);
+      if (offer) {
+        if (offer.discount_type === 'percentage') {
+          return subtotal - (subtotal * offer.discount_value / 100);
+        } else if (offer.discount_type === 'fixed') {
+          return subtotal - offer.discount_value;
+        }
+      }
+    }
+    
+    return subtotal;
+  };
+
+  const handleProceedToPayment = () => {
+    setShowPayment(true);
   };
 
   const handleBooking = async () => {
@@ -86,8 +110,8 @@ const FlightDetail = () => {
       );
 
       toast({
-        title: 'Booking confirmed!',
-        description: `Your PNR is ${booking.pnr}`,
+        title: 'Payment successful!',
+        description: `Your booking is confirmed. PNR: ${booking.pnr}`,
       });
 
       navigate('/bookings');
@@ -121,6 +145,19 @@ const FlightDetail = () => {
           <p className="text-muted-foreground">Flight not found</p>
         </div>
       </div>
+    );
+  }
+
+  if (showPayment) {
+    return (
+      <PaymentGateway
+        total={calculateTotal()}
+        paymentMethod={paymentMethod}
+        onPaymentMethodChange={setPaymentMethod}
+        onConfirmPayment={handleBooking}
+        onBack={() => setShowPayment(false)}
+        isProcessing={isBooking}
+      />
     );
   }
 
@@ -226,6 +263,50 @@ const FlightDetail = () => {
                 ))}
               </div>
             </Card>
+
+            {/* Payment Offers */}
+            {paymentOffers.length > 0 && (
+              <Card className="p-6">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Tag className="h-5 w-5 text-primary" />
+                  Payment Offers
+                </h3>
+                <div className="space-y-3">
+                  {paymentOffers
+                    .filter(offer => offer.payment_methods.includes(paymentMethod))
+                    .map((offer) => (
+                      <div
+                        key={offer.id}
+                        onClick={() => setSelectedOffer(selectedOffer === offer.id ? null : offer.id)}
+                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                          selectedOffer === offer.id
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="font-bold text-lg">{offer.name}</div>
+                          <div className="text-primary font-bold">
+                            {offer.discount_type === 'percentage' 
+                              ? `${offer.discount_value}% OFF`
+                              : `$${offer.discount_value} OFF`
+                            }
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{offer.description}</p>
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          Valid for: {offer.payment_methods.join(', ').replace(/_/g, ' ')}
+                        </div>
+                      </div>
+                    ))}
+                  {paymentOffers.filter(offer => offer.payment_methods.includes(paymentMethod)).length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No offers available for selected payment method
+                    </p>
+                  )}
+                </div>
+              </Card>
+            )}
           </div>
 
           {/* Booking Summary */}
@@ -281,6 +362,24 @@ const FlightDetail = () => {
                     </span>
                   </div>
                 )}
+                {selectedOffer && (
+                  <div className="flex justify-between text-sm text-primary font-medium">
+                    <span>Discount Applied</span>
+                    <span>
+                      -$
+                      {(() => {
+                        const offer = paymentOffers.find(o => o.id === selectedOffer);
+                        const subtotal = (flight.price * passengers) + 
+                          ancillaries.filter((a) => selectedAncillaries.includes(a.id))
+                            .reduce((sum, a) => sum + a.price, 0);
+                        if (offer?.discount_type === 'percentage') {
+                          return (subtotal * offer.discount_value / 100).toFixed(2);
+                        }
+                        return offer?.discount_value || 0;
+                      })()}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-between items-center mb-6">
@@ -291,18 +390,10 @@ const FlightDetail = () => {
               </div>
 
               <Button
-                onClick={handleBooking}
-                disabled={isBooking}
+                onClick={handleProceedToPayment}
                 className="w-full h-12"
               >
-                {isBooking ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  'Confirm Booking'
-                )}
+                Proceed to Payment
               </Button>
             </Card>
           </div>

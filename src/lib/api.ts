@@ -72,6 +72,16 @@ export interface Ancillary {
   description: string;
 }
 
+export interface PaymentOffer {
+  id: number;
+  name: string;
+  description: string;
+  discount_type: string;
+  discount_value: number;
+  payment_methods: ('credit_card' | 'debit_card' | 'wallet')[];
+  eligibility_rules: Record<string, any>;
+}
+
 export interface BookingRequest {
   flight_id: number;
   passengers: number;
@@ -122,6 +132,11 @@ export const flightsAPI = {
   
   getAncillaries: async (token: string): Promise<Ancillary[]> => {
     const response = await api.get(`/flights/ancillaries/all?token=${token}`);
+    return response.data;
+  },
+  
+  getPaymentOffers: async (token: string): Promise<PaymentOffer[]> => {
+    const response = await api.get(`/flights/payment-offers/all?token=${token}`);
     return response.data;
   },
 };
