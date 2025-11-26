@@ -105,6 +105,40 @@ export interface Booking {
   payment_method: string;
 }
 
+export interface PageVisit {
+  user_id: number;
+  page: string;
+  timestamp: string;
+  dwell_time: number;
+  session_id: string;
+}
+
+export interface UserSession {
+  user_id: number;
+  session_id: string;
+  current_page: string;
+  page_start_time: string;
+  journey_start_time: string;
+  pages_visited: any[];
+  dwell_times: Record<string, number>;
+}
+
+export interface UserBehavior {
+  user_id: number;
+  pages_visited: string[];
+  dwell_time: Record<string, number>;
+  dropoff_page: string;
+  ancillary_purchase_history: any[];
+  payment_attempts: number;
+  payment_success_rate: number;
+}
+
+export interface ExportTrackingData {
+  user_sessions: Record<string, UserSession>;
+  page_visits: PageVisit[];
+  user_behavior: Record<string, UserBehavior>;
+}
+
 // Auth API
 export const authAPI = {
   login: async (data: LoginRequest): Promise<AuthResponse> => {
@@ -158,6 +192,39 @@ export const bookingsAPI = {
 export const aiAPI = {
   getWidget: async (page: string, token: string): Promise<string> => {
     const response = await api.post(`/ai/widget/${page}?token=${token}`);
+    return response.data;
+  },
+};
+
+// Tracking API
+export const trackingAPI = {
+  trackPageVisit: async (page: string, token: string): Promise<string> => {
+    const response = await api.post(`/tracking/page-visit/${page}?token=${token}`);
+    return response.data;
+  },
+  
+  getCurrentPage: async (token: string): Promise<string> => {
+    const response = await api.get(`/tracking/current-page?token=${token}`);
+    return response.data;
+  },
+  
+  getSessionData: async (token: string): Promise<string> => {
+    const response = await api.get(`/tracking/session-data?token=${token}`);
+    return response.data;
+  },
+  
+  exportTrackingData: async (token: string): Promise<ExportTrackingData> => {
+    const response = await api.get(`/tracking/export-tracking-data?token=${token}`);
+    return response.data;
+  },
+  
+  getUserBehavior: async (userId: number, token: string): Promise<string> => {
+    const response = await api.get(`/tracking/user-behavior/${userId}?token=${token}`);
+    return response.data;
+  },
+  
+  trackDropoff: async (token: string): Promise<string> => {
+    const response = await api.post(`/tracking/track-dropoff?token=${token}`);
     return response.data;
   },
 };
