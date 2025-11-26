@@ -11,12 +11,15 @@ import { Flight, Ancillary, PaymentOffer, flightsAPI, bookingsAPI } from '@/lib/
 import { authStorage } from '@/lib/auth';
 import { Plane, Clock, Calendar, Users, Loader2, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import PaymentGateway from '@/components/PaymentGateway';
+import PaymentGatewayWithAI from '@/components/PaymentGatewayWithAI';
+import { useAIWidget } from '@/hooks/useAIWidget';
+import { AIWidgetRenderer } from '@/components/AIWidgetRenderer';
 
 const FlightDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { widgetConfig, dismissWidget, handleCTAAction } = useAIWidget('addons');
   const [flight, setFlight] = useState<Flight | null>(null);
   const [ancillaries, setAncillaries] = useState<Ancillary[]>([]);
   const [selectedAncillaries, setSelectedAncillaries] = useState<number[]>([]);
@@ -27,6 +30,20 @@ const FlightDetail = () => {
   const [showPayment, setShowPayment] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBooking, setIsBooking] = useState(false);
+
+  const onWidgetAction = (action: string) => {
+    handleCTAAction(action);
+    if (action === 'apply_bundle') {
+      const bundleIds = ancillaries.slice(0, 3).map(a => a.id);
+      setSelectedAncillaries(bundleIds);
+      toast({
+        title: "Bundle Applied",
+        description: "Recommended add-ons have been selected for you!",
+      });
+    } else if (action === 'skip_addons') {
+      setShowPayment(true);
+    }
+  };
 
   useEffect(() => {
     const loadFlightDetails = async () => {
@@ -138,9 +155,18 @@ const FlightDetail = () => {
   }
 
   if (!flight) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
+  return (
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      
+      {/* AI Widget for Add-ons Page */}
+      {!showPayment && (
+        <AIWidgetRenderer
+          widgetConfig={widgetConfig}
+          onDismiss={dismissWidget}
+          onCTAClick={onWidgetAction}
+        />
+      )}
         <div className="container mx-auto px-4 py-20 text-center">
           <p className="text-muted-foreground">Flight not found</p>
         </div>
@@ -150,7 +176,7 @@ const FlightDetail = () => {
 
   if (showPayment) {
     return (
-      <PaymentGateway
+      <PaymentGatewayWithAI
         total={calculateTotal()}
         paymentMethod={paymentMethod}
         onPaymentMethodChange={setPaymentMethod}

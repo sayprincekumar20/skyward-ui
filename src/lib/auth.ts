@@ -38,3 +38,6 @@ export const authStorage = {
     return !!localStorage.getItem(TOKEN_KEY);
   },
 };
+
+// Convenience export
+export const getAuthToken = authStorage.getToken;
