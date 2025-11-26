@@ -6,12 +6,28 @@ import { Flight, flightsAPI } from '@/lib/api';
 import { authStorage } from '@/lib/auth';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAIWidget } from '@/hooks/useAIWidget';
+import { AIWidgetRenderer } from '@/components/AIWidgetRenderer';
 
 const Flights = () => {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { widgetConfig, dismissWidget, handleCTAAction } = useAIWidget('flight_selection');
   const [flights, setFlights] = useState<Flight[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const onWidgetAction = (action: string) => {
+    handleCTAAction(action);
+    if (action === 'show_cheapest') {
+      const sorted = [...flights].sort((a, b) => a.price - b.price);
+      setFlights(sorted);
+    } else if (action === 'price_alert') {
+      toast({
+        title: "Price Alert Set",
+        description: "We'll notify you when prices drop!",
+      });
+    }
+  };
 
   useEffect(() => {
     const searchFlights = async () => {
@@ -63,6 +79,13 @@ const Flights = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      
+      {/* AI Widget */}
+      <AIWidgetRenderer
+        widgetConfig={widgetConfig}
+        onDismiss={dismissWidget}
+        onCTAClick={onWidgetAction}
+      />
       
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">

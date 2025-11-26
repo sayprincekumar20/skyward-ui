@@ -8,10 +8,13 @@ import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search as SearchIcon, MapPin, Calendar, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAIWidget } from '@/hooks/useAIWidget';
+import { AIWidgetRenderer } from '@/components/AIWidgetRenderer';
 
 const Search = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { widgetConfig, dismissWidget, handleCTAAction } = useAIWidget('search');
   const [searchData, setSearchData] = useState({
     origin: '',
     destination: '',
@@ -21,6 +24,15 @@ const Search = () => {
     cabin_class: 'economy' as 'economy' | 'business' | 'first',
     trip_type: 'one_way' as 'one_way' | 'round_trip',
   });
+
+  const onWidgetAction = (action: string) => {
+    handleCTAAction(action);
+    if (action === 'manage_existing') {
+      navigate('/bookings');
+    } else if (action === 'continue_search') {
+      dismissWidget();
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,6 +63,13 @@ const Search = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background">
       <Navbar />
+      
+      {/* AI Widget */}
+      <AIWidgetRenderer
+        widgetConfig={widgetConfig}
+        onDismiss={dismissWidget}
+        onCTAClick={onWidgetAction}
+      />
       
       <main className="container mx-auto px-4 py-16">
         <div className="max-w-5xl mx-auto">
