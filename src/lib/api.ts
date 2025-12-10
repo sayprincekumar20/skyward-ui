@@ -103,6 +103,8 @@ export interface Booking {
   payment_status: string;
   ancillary_total: number;
   payment_method: string;
+  checked_in?: boolean;
+  selected_seats?: string[];
 }
 
 export interface PageVisit {
@@ -225,6 +227,90 @@ export const trackingAPI = {
   
   trackDropoff: async (token: string): Promise<string> => {
     const response = await api.post(`/tracking/track-dropoff?token=${token}`);
+    return response.data;
+  },
+};
+
+// Check-in Types
+export interface CheckinFindRequest {
+  pnr: string;
+  email: string;
+}
+
+export interface AnalyticsBookingDetail {
+  USR_GUID: string;
+  DEPARTURE_FY: number;
+  TOTALPNR: number;
+  TOTALSEGMENTS: number;
+  TOTALSPEND: number;
+  PREFERREDORIGIN: string;
+  PREFERREDDESTINATION: string;
+  WINDOW: number;
+  AISLE: number;
+  VEG_MEAL: number;
+  NON_VEG_MEAL: number;
+  LEISURE: number;
+  BUSINESS: number;
+  DOMESTIC: number;
+  INTERNATIONAL: number;
+  [key: string]: any;
+}
+
+export interface SeatInfo {
+  seat_id: string;
+  row: number;
+  letter: string;
+  seat_type: string;
+  cabin_class: string;
+  booked: boolean;
+  booking_pnr: string | null;
+}
+
+export interface AgentResponse {
+  title?: string;
+  recommended_seat?: string;
+  seat_type?: string;
+  seat_features?: string[];
+  reason?: string;
+  price?: number;
+  urgency_message?: string;
+  auto_selection_info?: string[];
+  error?: string;
+  detail?: string;
+}
+
+export interface CheckinFindResponse {
+  booking: Booking & {
+    analytics_booking_details?: AnalyticsBookingDetail[];
+    USR_GUID?: string;
+  };
+  user_info: User & { USR_GUID?: string };
+  seat_map: SeatInfo[];
+  agent_response: AgentResponse;
+}
+
+export interface SelectSeatRequest {
+  pnr: string;
+  flight_id: number;
+  seat_id: string;
+}
+
+export interface SelectSeatResponse {
+  success: boolean;
+  message: string;
+  booking: Booking;
+  agent_response: AgentResponse;
+}
+
+// Check-in API
+export const checkinAPI = {
+  find: async (data: CheckinFindRequest, token: string): Promise<CheckinFindResponse> => {
+    const response = await api.post(`/checkin/find?token=${token}`, data);
+    return response.data;
+  },
+  
+  selectSeat: async (data: SelectSeatRequest, token: string): Promise<SelectSeatResponse> => {
+    const response = await api.post(`/checkin/select-seat?token=${token}`, data);
     return response.data;
   },
 };
