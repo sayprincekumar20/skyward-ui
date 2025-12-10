@@ -230,7 +230,6 @@ const CheckIn = () => {
                     value={pnr} 
                     onChange={(e) => setPnr(e.target.value.toUpperCase())}
                     placeholder="Enter your PNR"
-                    required
                   />
                 </div>
                 <div className="space-y-2">
@@ -241,12 +240,11 @@ const CheckIn = () => {
                     value={email} 
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
-                    required
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full" disabled={loading || (!pnr && !email)}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Find Booking
+                  Web Check-in
                 </Button>
               </form>
             </CardContent>
