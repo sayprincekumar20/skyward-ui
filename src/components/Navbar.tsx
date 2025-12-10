@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Plane, User, LogOut } from 'lucide-react';
+import { Plane, User, LogOut, ClipboardCheck } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
 import { useEffect, useState } from 'react';
 
@@ -35,6 +35,12 @@ const Navbar = () => {
           <div className="flex items-center gap-4">
             {isAuthenticated ? (
               <>
+                <Link to="/checkin">
+                  <Button variant="ghost" className="gap-2">
+                    <ClipboardCheck className="h-4 w-4" />
+                    Check-In
+                  </Button>
+                </Link>
                 <Link to="/bookings">
                   <Button variant="ghost" className="gap-2">
                     <User className="h-4 w-4" />
