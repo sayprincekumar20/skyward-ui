@@ -5,10 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { checkinAPI, CheckinFindResponse, SeatInfo } from '@/lib/api';
 import { getAuthToken } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Plane, User, Armchair, Target, Check, Loader2 } from 'lucide-react';
+import { Plane, User, Armchair, Target, Check, Loader2, Sparkles, X } from 'lucide-react';
 
 const CheckIn = () => {
   const { toast } = useToast();
@@ -18,6 +19,7 @@ const CheckIn = () => {
   const [selectingSeats, setSelectingSeats] = useState(false);
   const [checkinData, setCheckinData] = useState<CheckinFindResponse | null>(null);
   const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
+  const [showRecommendationPopup, setShowRecommendationPopup] = useState(false);
 
   const handleFindBooking = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +34,11 @@ const CheckIn = () => {
       const data = await checkinAPI.find({ pnr, email }, token);
       setCheckinData(data);
       toast({ title: 'Booking found!', description: `PNR: ${data.booking.pnr}` });
+      
+      // Show AI recommendation popup if agent_response has a valid recommended_seat
+      if (data.agent_response?.response?.recommended_seat) {
+        setShowRecommendationPopup(true);
+      }
     } catch (error: any) {
       toast({ 
         title: 'Booking not found', 
@@ -209,9 +216,89 @@ const CheckIn = () => {
     );
   };
 
+  const renderRecommendationPopup = () => {
+    if (!checkinData?.agent_response?.response?.recommended_seat) return null;
+    
+    const { recommended_seat } = checkinData.agent_response.response;
+    
+    return (
+      <Dialog open={showRecommendationPopup} onOpenChange={setShowRecommendationPopup}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI Seat Recommendation
+            </DialogTitle>
+            <DialogDescription>
+              Based on your preferences, we've found the perfect seat for you
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 text-center">
+              <p className="text-sm text-muted-foreground mb-1">Your Recommended Seat</p>
+              <p className="text-4xl font-bold text-primary">{recommended_seat.seat_id}</p>
+              <div className="flex items-center justify-center gap-2 mt-2">
+                <Badge variant="secondary" className="capitalize">
+                  {recommended_seat.seat_type}
+                </Badge>
+                <Badge variant="outline" className="capitalize">
+                  Row {recommended_seat.row}
+                </Badge>
+                <Badge variant="outline" className="capitalize">
+                  {recommended_seat.cabin_class}
+                </Badge>
+              </div>
+            </div>
+            
+            {recommended_seat.features && recommended_seat.features.length > 0 && (
+              <div>
+                <p className="text-sm font-medium mb-2">Features:</p>
+                <div className="flex flex-wrap gap-2">
+                  {recommended_seat.features.map((feature, idx) => (
+                    <Badge key={idx} variant="outline">{feature}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {recommended_seat.price_upgrade && (
+              <div className="flex items-center justify-between border-t pt-4">
+                <span className="text-sm text-muted-foreground">Upgrade Price</span>
+                <span className="text-lg font-semibold">₹{recommended_seat.price_upgrade}</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex gap-3">
+            <Button 
+              variant="outline" 
+              className="flex-1"
+              onClick={() => setShowRecommendationPopup(false)}
+            >
+              Choose Later
+            </Button>
+            <Button 
+              className="flex-1"
+              onClick={() => {
+                handleSeatSelect(recommended_seat.seat_id);
+                setShowRecommendationPopup(false);
+              }}
+            >
+              Select This Seat
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      
+      {/* AI Recommendation Popup */}
+      {renderRecommendationPopup()}
       
       <main className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">Web Check-In</h1>

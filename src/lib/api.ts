@@ -266,15 +266,42 @@ export interface SeatInfo {
   booking_pnr: string | null;
 }
 
+export interface RecommendedSeat {
+  seat_id: string;
+  row: number;
+  letter: string;
+  seat_type: string;
+  cabin_class: string;
+  features: string[];
+  price_upgrade: number | null;
+}
+
+export interface AgentResponseData {
+  recommended_seat: RecommendedSeat;
+  alternatives?: RecommendedSeat[];
+  reasoning?: {
+    primary_reasons: string[];
+    constraints_applied: string[];
+    inferred_preferences: string[];
+  };
+  booking_details_matched?: Record<string, any>;
+  seat_map_snapshot?: {
+    total_seats: number;
+    available_seats: number;
+    available_window: number;
+    available_aisle: number;
+    available_extra_legroom: number;
+  };
+  confidence?: number;
+  agent_meta?: {
+    model_version: string;
+    timestamp: string;
+    notes: string | null;
+  };
+}
+
 export interface AgentResponse {
-  title?: string;
-  recommended_seat?: string;
-  seat_type?: string;
-  seat_features?: string[];
-  reason?: string;
-  price?: number;
-  urgency_message?: string;
-  auto_selection_info?: string[];
+  response?: AgentResponseData;
   error?: string;
   detail?: string;
 }
