@@ -219,73 +219,90 @@ const CheckIn = () => {
   const renderRecommendationPopup = () => {
     if (!checkinData?.agent_response?.response?.recommended_seat) return null;
     
-    const { recommended_seat } = checkinData.agent_response.response;
+    const { recommended_seat, reasoning, seat_map_snapshot, confidence } = checkinData.agent_response.response;
+    const analytics = checkinData.booking.analytics_booking_details?.[0];
+    const preferredOrigin = analytics?.PREFERREDORIGIN || 'DEL';
+    const preferredDest = analytics?.PREFERREDDESTINATION || 'BOM';
+    const availableWindowSeats = seat_map_snapshot?.available_window || checkinData.seat_map.filter(s => !s.booked && s.seat_type === 'window').length;
+    const upgradePrice = recommended_seat.price_upgrade || 3200;
+    
+    // Derive seat features text
+    const seatFeatures = recommended_seat.features?.length > 0 
+      ? recommended_seat.features.join(', ') 
+      : recommended_seat.seat_type === 'window' ? 'Window' : recommended_seat.seat_type === 'aisle' ? 'Aisle' : 'Middle';
     
     return (
       <Dialog open={showRecommendationPopup} onOpenChange={setShowRecommendationPopup}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-xl">
-              <Sparkles className="h-5 w-5 text-primary" />
-              AI Seat Recommendation
-            </DialogTitle>
-            <DialogDescription>
-              Based on your preferences, we've found the perfect seat for you
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 text-center">
-              <p className="text-sm text-muted-foreground mb-1">Your Recommended Seat</p>
-              <p className="text-4xl font-bold text-primary">{recommended_seat.seat_id}</p>
-              <div className="flex items-center justify-center gap-2 mt-2">
-                <Badge variant="secondary" className="capitalize">
-                  {recommended_seat.seat_type}
-                </Badge>
-                <Badge variant="outline" className="capitalize">
-                  Row {recommended_seat.row}
-                </Badge>
-                <Badge variant="outline" className="capitalize">
-                  {recommended_seat.cabin_class}
-                </Badge>
-              </div>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+          <div className="p-6 space-y-5">
+            {/* Header */}
+            <div className="text-center pb-4 border-b border-border">
+              <h2 className="text-2xl font-bold text-foreground">Upgrade your seat, powered by AI</h2>
             </div>
             
-            {recommended_seat.features && recommended_seat.features.length > 0 && (
-              <div>
-                <p className="text-sm font-medium mb-2">Features:</p>
-                <div className="flex flex-wrap gap-2">
-                  {recommended_seat.features.map((feature, idx) => (
-                    <Badge key={idx} variant="outline">{feature}</Badge>
-                  ))}
+            {/* Recommendation Section */}
+            <div className="space-y-3">
+              <h3 className="font-semibold text-lg">Your Recommended Upgrade (Smart-Selected)</h3>
+              
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-3">
+                  <Plane className="h-5 w-5 text-primary flex-shrink-0" />
+                  <span>Upgrade Recommended: <strong>{preferredOrigin} → {preferredDest}</strong></span>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Armchair className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <span>Your best seat: <strong>{recommended_seat.seat_id} ({seatFeatures}, Extra Legroom)</strong></span>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Target className="h-5 w-5 text-destructive flex-shrink-0" />
+                  <span>Matched to your preference based on previous trips</span>
                 </div>
               </div>
-            )}
+              
+              <p className="text-primary font-semibold">
+                Only {availableWindowSeats} stretch seats left
+              </p>
+            </div>
             
-            {recommended_seat.price_upgrade && (
-              <div className="flex items-center justify-between border-t pt-4">
-                <span className="text-sm text-muted-foreground">Upgrade Price</span>
-                <span className="text-lg font-semibold">₹{recommended_seat.price_upgrade}</span>
+            {/* Price Section */}
+            <div className="pt-4 border-t border-border">
+              <p className="font-semibold text-sm">Price Today</p>
+              <p className="text-3xl font-bold">₹{upgradePrice.toLocaleString()}</p>
+              <p className="text-sm text-muted-foreground">High comfort score for this 3.5h flight</p>
+            </div>
+            
+            {/* Auto-Selection Section */}
+            <div className="pt-4 border-t border-border">
+              <div className="flex items-center gap-2 font-semibold mb-2">
+                <Check className="h-5 w-5 text-primary" />
+                <span>Included in Auto-Selection</span>
               </div>
-            )}
-          </div>
-          
-          <div className="flex gap-3">
+              <ul className="text-sm text-muted-foreground space-y-1 ml-7">
+                <li>• Seat {recommended_seat.seat_id} pre-assigned for you</li>
+                <li>• You can change seat → <button 
+                  onClick={() => {
+                    setShowRecommendationPopup(false);
+                    setTimeout(() => document.getElementById('seat-map')?.scrollIntoView({ behavior: 'smooth' }), 100);
+                  }}
+                  className="text-primary hover:underline font-medium"
+                >Change seat</button></li>
+              </ul>
+            </div>
+            
+            {/* CTA Button */}
             <Button 
-              variant="outline" 
-              className="flex-1"
-              onClick={() => setShowRecommendationPopup(false)}
-            >
-              Choose Later
-            </Button>
-            <Button 
-              className="flex-1"
+              className="w-full bg-primary hover:bg-primary/90" 
+              size="lg"
               onClick={() => {
                 handleSeatSelect(recommended_seat.seat_id);
                 setShowRecommendationPopup(false);
               }}
+              disabled={selectingSeats}
             >
-              Select This Seat
+              {selectingSeats ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Upgrade Now
             </Button>
           </div>
         </DialogContent>
@@ -343,36 +360,68 @@ const CheckIn = () => {
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle>Booking Details</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <Plane className="h-5 w-5" />
+                      Booking Details
+                    </CardTitle>
                     <Badge variant={checkinData.booking.checked_in ? 'default' : 'secondary'}>
                       {checkinData.booking.checked_in ? 'Checked In' : 'Not Checked In'}
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-4">
+                  {/* Route Info */}
+                  {checkinData.booking.analytics_booking_details?.[0] && (
+                    <div className="bg-primary/5 rounded-lg p-4 border border-primary/20">
+                      <div className="flex items-center justify-center gap-4">
+                        <div className="text-center">
+                          <p className="text-2xl font-bold">{checkinData.booking.analytics_booking_details[0].PREFERREDORIGIN}</p>
+                          <p className="text-xs text-muted-foreground">Origin</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-[2px] bg-primary/40"></div>
+                          <Plane className="h-5 w-5 text-primary" />
+                          <div className="w-8 h-[2px] bg-primary/40"></div>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-2xl font-bold">{checkinData.booking.analytics_booking_details[0].PREFERREDDESTINATION}</p>
+                          <p className="text-xs text-muted-foreground">Destination</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">PNR</p>
-                      <p className="font-semibold">{checkinData.booking.pnr}</p>
+                    <div className="bg-muted/50 rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">PNR</p>
+                      <p className="font-bold text-lg">{checkinData.booking.pnr}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Status</p>
-                      <p className="font-semibold capitalize">{checkinData.booking.status}</p>
+                    <div className="bg-muted/50 rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Status</p>
+                      <p className="font-bold text-lg capitalize">{checkinData.booking.status}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Passengers</p>
-                      <p className="font-semibold">{checkinData.booking.passengers}</p>
+                    <div className="bg-muted/50 rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Passengers</p>
+                      <p className="font-bold text-lg">{checkinData.booking.passengers}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Fare</p>
-                      <p className="font-semibold">₹{checkinData.booking.total_fare}</p>
+                    <div className="bg-muted/50 rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Fare</p>
+                      <p className="font-bold text-lg">₹{checkinData.booking.total_fare.toLocaleString()}</p>
                     </div>
                     {checkinData.booking.selected_seats && checkinData.booking.selected_seats.length > 0 && (
-                      <div className="col-span-2">
-                        <p className="text-sm text-muted-foreground">Selected Seats</p>
-                        <p className="font-semibold">{checkinData.booking.selected_seats.join(', ')}</p>
+                      <div className="col-span-2 bg-primary/10 rounded-lg p-3 border border-primary/20">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Selected Seats</p>
+                        <p className="font-bold text-lg text-primary">{checkinData.booking.selected_seats.join(', ')}</p>
                       </div>
                     )}
+                  </div>
+                  
+                  {/* Payment Info */}
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <span className="text-sm text-muted-foreground">Payment Status</span>
+                    <Badge variant={checkinData.booking.payment_status === 'completed' ? 'default' : 'secondary'} className="capitalize">
+                      {checkinData.booking.payment_status}
+                    </Badge>
                   </div>
                 </CardContent>
               </Card>
