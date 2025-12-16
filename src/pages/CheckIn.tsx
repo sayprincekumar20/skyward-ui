@@ -18,7 +18,7 @@ const CheckIn = () => {
   const [loading, setLoading] = useState(false);
   const [selectingSeats, setSelectingSeats] = useState(false);
   const [checkinData, setCheckinData] = useState<CheckinFindResponse | null>(null);
-  const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [showRecommendationPopup, setShowRecommendationPopup] = useState(false);
 
   const handleFindBooking = async (e: React.FormEvent) => {
@@ -50,13 +50,20 @@ const CheckIn = () => {
     }
   };
 
+  const handleSeatToggle = (seatId: string) => {
+    setSelectedSeats(prev => 
+      prev.includes(seatId) 
+        ? prev.filter(s => s !== seatId) 
+        : [...prev, seatId]
+    );
+  };
+
   const handleSeatSelect = async (seatId: string) => {
     if (!checkinData) return;
     const token = getAuthToken();
     if (!token) return;
 
     setSelectingSeats(true);
-    setSelectedSeat(seatId);
     try {
       const result = await checkinAPI.selectSeat({
         pnr: checkinData.booking.pnr,
@@ -65,6 +72,7 @@ const CheckIn = () => {
       }, token);
       
       toast({ title: 'Seat selected!', description: result.message });
+      setSelectedSeats([seatId]);
       // Refresh data
       const updatedData = await checkinAPI.find({ pnr, email }, token);
       setCheckinData(updatedData);
@@ -79,8 +87,39 @@ const CheckIn = () => {
     }
   };
 
+  const handleUpgradeNow = async () => {
+    if (!checkinData || selectedSeats.length === 0) return;
+    const token = getAuthToken();
+    if (!token) return;
+
+    setSelectingSeats(true);
+    try {
+      // Select the first seat (or you can loop through all)
+      const seatToSelect = selectedSeats[0];
+      const result = await checkinAPI.selectSeat({
+        pnr: checkinData.booking.pnr,
+        flight_id: checkinData.booking.flight_id,
+        seat_id: seatToSelect,
+      }, token);
+      
+      toast({ title: 'Seat upgraded!', description: result.message });
+      // Refresh data
+      const updatedData = await checkinAPI.find({ pnr, email }, token);
+      setCheckinData(updatedData);
+    } catch (error: any) {
+      toast({ 
+        title: 'Failed to upgrade seat', 
+        description: error.response?.data?.detail || 'Please try again',
+        variant: 'destructive' 
+      });
+    } finally {
+      setSelectingSeats(false);
+    }
+  };
+
   const renderSeatMap = (seats: SeatInfo[]) => {
     const rows = [...new Set(seats.map(s => s.row))].sort((a, b) => a - b);
+    const displaySelectedSeats = selectedSeats.length > 0 ? selectedSeats : (checkinData?.booking.selected_seats || []);
     
     return (
       <div className="space-y-2">
@@ -105,22 +144,25 @@ const CheckIn = () => {
             return (
               <div key={row} className="flex items-center justify-center gap-1">
                 <span className="w-8 text-xs text-muted-foreground">{row}</span>
-                {rowSeats.map(seat => (
-                  <button
-                    key={seat.seat_id}
-                    disabled={seat.booked || selectingSeats}
-                    onClick={() => handleSeatSelect(seat.seat_id)}
-                    className={`w-8 h-8 rounded text-xs font-medium transition-colors ${
-                      seat.booked 
-                        ? 'bg-muted text-muted-foreground cursor-not-allowed' 
-                        : checkinData?.booking.selected_seats?.includes(seat.seat_id)
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-primary/20 hover:bg-primary/40 text-foreground cursor-pointer'
-                    }`}
-                  >
-                    {seat.letter}
-                  </button>
-                ))}
+                {rowSeats.map(seat => {
+                  const isSelected = displaySelectedSeats.includes(seat.seat_id);
+                  return (
+                    <button
+                      key={seat.seat_id}
+                      disabled={seat.booked || selectingSeats}
+                      onClick={() => handleSeatToggle(seat.seat_id)}
+                      className={`w-8 h-8 rounded text-xs font-medium transition-colors ${
+                        seat.booked 
+                          ? 'bg-muted text-muted-foreground cursor-not-allowed' 
+                          : isSelected
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-primary/20 hover:bg-primary/40 text-foreground cursor-pointer'
+                      }`}
+                    >
+                      {seat.letter}
+                    </button>
+                  );
+                })}
               </div>
             );
           })}
@@ -135,19 +177,23 @@ const CheckIn = () => {
     const { agent_response, booking, seat_map } = checkinData;
     const analytics = booking.analytics_booking_details?.[0];
     
-    // If there's an error, use analytics data to create recommendation
-    const hasError = agent_response.error;
-    
-    // Derive recommendation from analytics
+    // Derive recommendation from analytics or agent response
     const preferredSeatType = analytics ? (analytics.WINDOW > analytics.AISLE ? 'Window' : 'Aisle') : 'Window';
     const preferredOrigin = analytics?.PREFERREDORIGIN || 'N/A';
     const preferredDest = analytics?.PREFERREDDESTINATION || 'N/A';
     
-    // Find a recommended available seat
+    // Use agent recommended seat or find from available
     const availableSeats = seat_map.filter(s => !s.booked);
-    const recommendedSeat = availableSeats.find(s => 
+    const agentRecommendedSeat = agent_response?.response?.recommended_seat;
+    const recommendedSeat = agentRecommendedSeat || availableSeats.find(s => 
       s.seat_type.toLowerCase() === preferredSeatType.toLowerCase()
     ) || availableSeats[0];
+
+    // Display seats - either user selected or from booking
+    const displaySeats = selectedSeats.length > 0 ? selectedSeats : (booking.selected_seats || []);
+    const displaySeatInfo = displaySeats.length > 0 
+      ? displaySeats.join(', ')
+      : recommendedSeat?.seat_id || 'N/A';
 
     return (
       <Card className="border-primary/20 bg-gradient-to-br from-background to-primary/5">
@@ -168,7 +214,7 @@ const CheckIn = () => {
               
               <div className="flex items-center gap-2">
                 <Armchair className="h-5 w-5 text-muted-foreground" />
-                <span>Your best seat: <strong>{recommendedSeat?.seat_id || 'N/A'} ({preferredSeatType}, Extra Legroom)</strong></span>
+                <span>Your best seat: <strong>{displaySeatInfo} ({preferredSeatType}, Extra Legroom)</strong></span>
               </div>
               
               <div className="flex items-center gap-2">
@@ -194,7 +240,7 @@ const CheckIn = () => {
               <span>Included in Auto-Selection</span>
             </div>
             <ul className="text-sm text-muted-foreground space-y-1 ml-7">
-              <li>• Seat {recommendedSeat?.seat_id || 'N/A'} pre-assigned for you</li>
+              <li>• Seat {displaySeatInfo} pre-assigned for you</li>
               <li>• You can change seat → <button 
                 onClick={() => document.getElementById('seat-map')?.scrollIntoView({ behavior: 'smooth' })}
                 className="text-primary hover:underline"
@@ -205,8 +251,8 @@ const CheckIn = () => {
           <Button 
             className="w-full" 
             size="lg"
-            onClick={() => recommendedSeat && handleSeatSelect(recommendedSeat.seat_id)}
-            disabled={!recommendedSeat || selectingSeats}
+            onClick={handleUpgradeNow}
+            disabled={selectingSeats || (selectedSeats.length === 0 && !booking.selected_seats?.length)}
           >
             {selectingSeats ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             Upgrade Now
@@ -408,12 +454,15 @@ const CheckIn = () => {
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Fare</p>
                       <p className="font-bold text-lg">₹{checkinData.booking.total_fare.toLocaleString()}</p>
                     </div>
-                    {checkinData.booking.selected_seats && checkinData.booking.selected_seats.length > 0 && (
-                      <div className="col-span-2 bg-primary/10 rounded-lg p-3 border border-primary/20">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Selected Seats</p>
-                        <p className="font-bold text-lg text-primary">{checkinData.booking.selected_seats.join(', ')}</p>
-                      </div>
-                    )}
+                    {(() => {
+                      const displaySeats = selectedSeats.length > 0 ? selectedSeats : (checkinData.booking.selected_seats || []);
+                      return displaySeats.length > 0 && (
+                        <div className="col-span-2 bg-primary/10 rounded-lg p-3 border border-primary/20">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide">Selected Seats</p>
+                          <p className="font-bold text-lg text-primary">{displaySeats.join(', ')}</p>
+                        </div>
+                      );
+                    })()}
                   </div>
                   
                   {/* Payment Info */}
@@ -476,6 +525,7 @@ const CheckIn = () => {
                   setCheckinData(null);
                   setPnr('');
                   setEmail('');
+                  setSelectedSeats([]);
                 }}
               >
                 Check Another Booking
